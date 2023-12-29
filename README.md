@@ -1,5 +1,13 @@
 # CFU Playground
 
+## For TA
+Please make by following cmds. (Simply extends i$ & d$ size, and also changed to dynamic branch predition)
+* `make EXTRA_LITEX_ARGS="--cpu-variant=generate+csrPluginConfig:all+cfu+iCacheSize:8192+dCacheSize:8192+prediction:dynamic" prog`
+* `make EXTRA_LITEX_ARGS="--cpu-variant=generate+csrPluginConfig:all+cfu+iCacheSize:8192+dCacheSize:8192+prediction:dynamic" load`
+
+The average cycles taken should be around ***71M***.
+
+---
 Want a faster ML processor?   Do it yourself!
 
 This project provides a framework that an engineer, intern, or student can use to design and evaluate **enhancements** to an FPGA-based “soft” processor, specifically to increase the performance of machine learning (ML) tasks.   The goal is to abstract away most infrastructure details so that the user can get up to speed quickly and focus solely on adding new processor instructions, exploiting them in the computation, and measuring the results.
