@@ -26,7 +26,6 @@ limitations under the License.
 #include "perf.h"
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "tensorflow/lite/kernels/internal/portable_tensor_utils.h"
-typedef int v4si __attribute__((vector_size(16)));
 typedef int v4sb __attribute__((vector_size(4)));
 
 union VectorUnion {
@@ -34,6 +33,15 @@ union VectorUnion {
   uint32_t scalar;
 };
 
+struct v3sb {
+  int8_t val1;
+  int8_t val2;
+  int8_t val3;
+} __attribute__((packed));
+constexpr uint32_t pack_vals(int8_t w, int8_t x, int8_t y, int8_t z) {
+  return ((uint32_t)(uint8_t)w << 24) | ((uint32_t)(uint8_t)x << 16) |
+         ((uint32_t)(uint8_t)y << 8) | z;
+}
 namespace tflite {
 namespace reference_integer_ops {
 
@@ -49,13 +57,13 @@ inline void ConvPerChannel(
 inline void ConvPerChannel(
     const ConvParams& params, const int32_t* output_multiplier,
     const int32_t* output_shift, const RuntimeShape& input_shape,
-    const int8_t* input_data1, const RuntimeShape& filter_shape,
-    const int8_t* filter_data1, const RuntimeShape& bias_shape,
+    const int8_t* input_data, const RuntimeShape& filter_shape,
+    const int8_t* filter_data, const RuntimeShape& bias_shape,
     const int32_t* bias_data, const RuntimeShape& output_shape,
     int8_t* output_data) {
   // Get parameters.
-  alignas(64) const int8_t* input_data = input_data1;
-  alignas(64) const int8_t* filter_data = filter_data1;
+  // alignas(64) const int8_t* input_data = input_data1;
+  // alignas(64) const int8_t* filter_data = filter_data1;
   const int32_t input_offset = params.input_offset;  // r = s(q - Z)
   const int stride_width = params.stride_width;
   const int stride_height = params.stride_height;
@@ -119,23 +127,40 @@ inline void ConvPerChannel(
               }
 
               // -fprofile-arcs
-              if (__builtin_expect(input_depth%4, 0)) {
-                // left-over
-                for (int in_channel = 0; in_channel < input_depth;
-                     in_channel++) {
-                  int8_t input_val =
-                      *(int8_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                     in_x, in_channel));
+              // if (__builtin_expect(input_depth % 4, 0)) {
+              if (__builtin_expect(input_depth % 4, 0)) {
+                int8_t input_val_c1 =
+                    *((int8_t*)(input_data +
+                                Offset(input_shape, batch, in_y, in_x, 0)));
+                int8_t input_val_c2 =
+                    *((int8_t*)(input_data +
+                                Offset(input_shape, batch, in_y, in_x, 1)));
+                int8_t input_val_c3 =
+                    *((int8_t*)(input_data +
+                                Offset(input_shape, batch, in_y, in_x, 2)));
+                uint32_t input_val =
+                    pack_vals(input_val_c1, input_val_c2, input_val_c3, 0);
 
-                  int8_t filter_val =
-                      *(int8_t*)(filter_data + Offset(filter_shape, out_channel,
-                                                      filter_y, filter_x,
-                                                      in_channel));
-                  acc += filter_val * (input_val + input_offset);
-                }
+                int8_t filter_val_c1 =
+                    *((int8_t*)(filter_data + Offset(filter_shape, out_channel,
+                                                     filter_y, filter_x, 0)));
+                int8_t filter_val_c2 =
+                    *((int8_t*)(filter_data + Offset(filter_shape, out_channel,
+                                                     filter_y, filter_x, 1)));
+                int8_t filter_val_c3 =
+                    *((int8_t*)(filter_data + Offset(filter_shape, out_channel,
+                                                     filter_y, filter_x, 2)));
+                uint32_t filter_val =
+                    pack_vals(filter_val_c1, filter_val_c2, filter_val_c3, 0);
+
+                acc = cfu_op0(/* funct7= */ 2, /* in0= */ input_val,
+                              /* in1= */ filter_val);
+                acc = cfu_op0(0, 0, 0);
+
               } else {
                 for (int in_channel = 0; in_channel < input_depth;
                      in_channel += 16) {
+                  // unroll loops manually
                   uint32_t input_val = *(
                       (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
                                                       in_x, in_channel)));
@@ -157,12 +182,12 @@ inline void ConvPerChannel(
 
                   input_val = *(
                       (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                      in_x, in_channel+8)));
+                                                      in_x, in_channel + 8)));
 
                   filter_val =
                       *((uint32_t*)(filter_data +
                                     Offset(filter_shape, out_channel, filter_y,
-                                           filter_x, in_channel+8)));
+                                           filter_x, in_channel + 8)));
                   cfu_op0(4, input_val, filter_val);
                   input_val = *(
                       (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
@@ -173,14 +198,13 @@ inline void ConvPerChannel(
                                     Offset(filter_shape, out_channel, filter_y,
                                            filter_x, in_channel + 12)));
                   cfu_op0(5, input_val, filter_val);
-                  
+
                   acc = cfu_op0(0, 0, 0);
-                
                 }
               }
             }
           }
-          if (bias_data) {
+          if (__builtin_expect(!!(bias_data), 1)) {
             acc += bias_data[out_channel];
           }
           acc = MultiplyByQuantizedMultiplier(

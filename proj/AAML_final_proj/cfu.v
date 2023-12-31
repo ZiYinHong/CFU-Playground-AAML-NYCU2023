@@ -75,6 +75,7 @@ module Cfu (
 );
   reg [15:0] InputOffset;
   reg [127:0] buffA = 'b0, buffB = 'b0;
+  reg [31:0] output_activation_max, output_activation_min;
 
   // SIMD multiply step:
   wire signed [16:0] prod_0, prod_1, prod_2, prod_3;
@@ -102,7 +103,7 @@ module Cfu (
   assign prod_14 = ($signed(buffA[119:112]) + $signed(InputOffset)) * $signed(buffB[119:112]);
   assign prod_15 = ($signed(buffA[127:120]) + $signed(InputOffset)) * $signed(buffB[127:120]);
 
-  wire signed [127:0] sum_prods;
+  wire signed [31:0] sum_prods;
   assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3 + prod_4 + prod_5 + prod_6 + prod_7 + prod_8 + prod_9 + prod_10 + prod_11 + prod_12 + prod_13 + prod_14 + prod_15;
 
   // Only not ready for a command when we have a response.
@@ -127,7 +128,8 @@ module Cfu (
         2'b000_0001: begin
           InputOffset <= cmd_payload_inputs_0[15:0];
           rsp_payload_outputs_0 <= 0'b0;
-          
+          buffA <= 'b0;
+          buffB <= 'b0;
         end
 
         7'd2: begin
@@ -148,6 +150,27 @@ module Cfu (
         7'd5: begin
           buffA[127:96] <= cmd_payload_inputs_0;
           buffB[127:96] <= cmd_payload_inputs_1;
+        end
+
+        // set output_activation_min & output_activation_max
+        7'd6: begin
+          output_activation_min <= cmd_payload_inputs_0;
+          output_activation_max <= cmd_payload_inputs_1;
+        end
+
+        7'd7: begin
+        end
+
+        7'd8: begin
+        end
+
+        7'd9: begin
+        end
+
+        7'd10: begin
+        end
+
+        7'd11: begin
         end
 
         default: begin
