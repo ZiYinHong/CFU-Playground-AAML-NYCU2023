@@ -26,22 +26,12 @@ limitations under the License.
 #include "perf.h"
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "tensorflow/lite/kernels/internal/portable_tensor_utils.h"
-typedef int v4sb __attribute__((vector_size(4)));
 
-union VectorUnion {
-  v4sb vector;
-  uint32_t scalar;
-};
-
-struct v3sb {
-  int8_t val1;
-  int8_t val2;
-  int8_t val3;
-} __attribute__((packed));
 constexpr uint32_t pack_vals(int8_t w, int8_t x, int8_t y, int8_t z) {
   return ((uint32_t)(uint8_t)w << 24) | ((uint32_t)(uint8_t)x << 16) |
          ((uint32_t)(uint8_t)y << 8) | z;
 }
+
 namespace tflite {
 namespace reference_integer_ops {
 
@@ -64,7 +54,7 @@ inline void ConvPerChannel(
   // Get parameters.
   // alignas(64) const int8_t* input_data = input_data1;
   // alignas(64) const int8_t* filter_data = filter_data1;
-  const int32_t input_offset = params.input_offset;  // r = s(q - Z)
+  //   const int32_t input_offset = params.input_offset;  // r = s(q - Z)
   const int stride_width = params.stride_width;
   const int stride_height = params.stride_height;
   const int dilation_width_factor = params.dilation_width_factor;
@@ -74,15 +64,15 @@ inline void ConvPerChannel(
   const int32_t output_offset = params.output_offset;
 
   // Set min and max value of the output.
-  const int32_t output_activation_min = params.quantized_activation_min;
-  const int32_t output_activation_max = params.quantized_activation_max;
+    const int32_t output_activation_min = params.quantized_activation_min;
+    const int32_t output_activation_max = params.quantized_activation_max;
 
   // Consistency check.
   TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
   TFLITE_DCHECK_EQ(input_shape.DimensionsCount(), 4);
   TFLITE_DCHECK_EQ(filter_shape.DimensionsCount(), 4);
   TFLITE_DCHECK_EQ(output_shape.DimensionsCount(), 4);
-  const int batches = MatchingDim(input_shape, 0, output_shape, 0);
+  // const int batches = MatchingDim(input_shape, 0, output_shape, 0);
   const int input_depth = input_shape.Dims(3);
   const int output_depth = MatchingDim(filter_shape, 0, output_shape, 3);
   if (bias_data) {
@@ -100,18 +90,19 @@ inline void ConvPerChannel(
   // const int filters_per_group = output_depth / groups;
   const int output_height = output_shape.Dims(1);
   const int output_width = output_shape.Dims(2);
-  for (int batch = 0; batch < batches; ++batch) {
+
+  cfu_op0(7, output_offset, 0);
+  // for (int batch = 0; batch < batches; ++batch) {
     for (int out_y = 0; out_y < output_height; ++out_y) {
       const int in_y_origin = (out_y * stride_height) - pad_height;
       for (int out_x = 0; out_x < output_width; ++out_x) {
         const int in_x_origin = (out_x * stride_width) - pad_width;
         for (int out_channel = 0; out_channel < output_depth; ++out_channel) {
-          // auto group = out_channel / filters_per_group;
-          // (void)group;
-          // Config input_offset and reset CFU accumulator
-          int32_t acc = 0;
           // Reset Software accumulator
-          cfu_op0(/* funct7= */ 1, input_offset, 0);
+          // int32_t acc = 0;
+          cfu_op0(1, 0, 0);
+          // cfu_op1(1, 0, 0);
+          cfu_op0(6, output_multiplier[out_channel], output_shift[out_channel]); 
           for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
             const int in_y = in_y_origin + dilation_height_factor * filter_y;
             for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
@@ -127,17 +118,16 @@ inline void ConvPerChannel(
               }
 
               // -fprofile-arcs
-              // if (__builtin_expect(input_depth % 4, 0)) {
-              if (__builtin_expect(input_depth % 4, 0)) {
+              if (__builtin_expect(input_depth % 16, 0)) {
                 int8_t input_val_c1 =
                     *((int8_t*)(input_data +
-                                Offset(input_shape, batch, in_y, in_x, 0)));
+                                Offset(input_shape, 0, in_y, in_x, 0)));
                 int8_t input_val_c2 =
                     *((int8_t*)(input_data +
-                                Offset(input_shape, batch, in_y, in_x, 1)));
+                                Offset(input_shape, 0, in_y, in_x, 1)));
                 int8_t input_val_c3 =
                     *((int8_t*)(input_data +
-                                Offset(input_shape, batch, in_y, in_x, 2)));
+                                Offset(input_shape, 0, in_y, in_x, 2)));
                 uint32_t input_val =
                     pack_vals(input_val_c1, input_val_c2, input_val_c3, 0);
 
@@ -153,71 +143,73 @@ inline void ConvPerChannel(
                 uint32_t filter_val =
                     pack_vals(filter_val_c1, filter_val_c2, filter_val_c3, 0);
 
-                acc = cfu_op0(/* funct7= */ 2, /* in0= */ input_val,
-                              /* in1= */ filter_val);
-                acc = cfu_op0(0, 0, 0);
+                //   acc = cfu_op0(/* funct7= */ 2, /* in0= */ input_val, /*
+                //   in1= */ filter_val); acc = cfu_op0(0, 0, 0);
+                cfu_op0(2, input_val, filter_val);
+                cfu_op0(12, 0, 0);
+                // acc = cfu_op0(0, 0, 0);
 
               } else {
                 for (int in_channel = 0; in_channel < input_depth;
                      in_channel += 16) {
-                  // unroll loops manually
-                  uint32_t input_val = *(
-                      (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                      in_x, in_channel)));
+                  // unroll loops manuallY
+                    uint32_t input_val, filter_val;
+                    input_val = *((uint32_t *)(input_data + Offset(input_shape, 0, in_y, in_x, in_channel)));
+                    filter_val = *((uint32_t *)(filter_data + Offset(filter_shape, out_channel, filter_y, filter_x, in_channel)));
+                    cfu_op0(2, input_val, filter_val);
 
-                  uint32_t filter_val =
-                      *((uint32_t*)(filter_data +
-                                    Offset(filter_shape, out_channel, filter_y,
-                                           filter_x, in_channel)));
-                  cfu_op0(2, input_val, filter_val);
-                  input_val = *(
-                      (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                      in_x, in_channel + 4)));
+                    input_val = *((uint32_t *)(input_data + Offset(input_shape, 0, in_y, in_x, in_channel+4)));
+                    filter_val = *((uint32_t *)(filter_data + Offset(filter_shape, out_channel, filter_y, filter_x, in_channel+4)));
+                    cfu_op0(3, input_val, filter_val);
 
-                  filter_val =
-                      *((uint32_t*)(filter_data +
-                                    Offset(filter_shape, out_channel, filter_y,
-                                           filter_x, in_channel + 4)));
-                  cfu_op0(3, input_val, filter_val);
+                    input_val = *((uint32_t *)(input_data + Offset(input_shape, 0, in_y, in_x, in_channel+8)));
+                    filter_val = *((uint32_t *)(filter_data + Offset(filter_shape, out_channel, filter_y, filter_x, in_channel+8)));
+                    cfu_op0(4, input_val, filter_val);
 
-                  input_val = *(
-                      (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                      in_x, in_channel + 8)));
+                    input_val = *((uint32_t *)(input_data + Offset(input_shape, 0, in_y, in_x, in_channel+12)));
+                    filter_val = *((uint32_t *)(filter_data + Offset(filter_shape, out_channel, filter_y, filter_x, in_channel+12)));
+                    cfu_op0(5, input_val, filter_val);
 
-                  filter_val =
-                      *((uint32_t*)(filter_data +
-                                    Offset(filter_shape, out_channel, filter_y,
-                                           filter_x, in_channel + 8)));
-                  cfu_op0(4, input_val, filter_val);
-                  input_val = *(
-                      (uint32_t*)(input_data + Offset(input_shape, batch, in_y,
-                                                      in_x, in_channel + 12)));
-
-                  filter_val =
-                      *((uint32_t*)(filter_data +
-                                    Offset(filter_shape, out_channel, filter_y,
-                                           filter_x, in_channel + 12)));
-                  cfu_op0(5, input_val, filter_val);
-
-                  acc = cfu_op0(0, 0, 0);
+                    // printf("Current ACC : %ld\n", cfu_op0(8, 0, 0));
+                    // acc = cfu_op0(0, 0, 0);
+                    // printf("preadd acc : %ld\n", cfu_op0(8, 0, 0));
+                    cfu_op0(12, 0, 0);
+                    // printf("postadd acc : %ld\n", cfu_op0(8, 0, 0));
+                    // cfu_op0(9, 0, 0);
                 }
               }
             }
           }
+
+          // printf("PreACC : %ld\n", cfu_op0(8, 0, 0));
+          // int32_t acc = cfu_op0(8, 0, 0);
           if (__builtin_expect(!!(bias_data), 1)) {
-            acc += bias_data[out_channel];
+            // acc += bias_data[out_channel];
+            cfu_op0(13, bias_data[out_channel], 0);
           }
+
+          int32_t acc = cfu_op0(8, 0, 0);
+
+          // printf("PostACC : %ld\n", acc);
+          // printf("PostACC : %ld\n", acc);
+          // cfu_op0(12, acc, 0);
+
+          // /*
           acc = MultiplyByQuantizedMultiplier(
-              acc, output_multiplier[out_channel], output_shift[out_channel]);
+          acc, output_multiplier[out_channel], output_shift[out_channel]);
           acc += output_offset;
           acc = std::max(acc, output_activation_min);
           acc = std::min(acc, output_activation_max);
-          output_data[Offset(output_shape, batch, out_y, out_x, out_channel)] =
+          // */
+          //   acc = cfu_op0(11, 0, 0);
+          // printf("Final : %ld\n", acc);
+          output_data[Offset(output_shape, 0, out_y, out_x, out_channel)] =
               static_cast<int8_t>(acc);
         }
       }
     }
-  }
+  // }
+  printf("END of calling CONV\n");
 }
 
 inline void ConvPerChannelWithPackedInt4Weights(
