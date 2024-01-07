@@ -47,13 +47,13 @@ inline void ConvPerChannel(
 inline void ConvPerChannel(
     const ConvParams& params, const int32_t* output_multiplier,
     const int32_t* output_shift, const RuntimeShape& input_shape,
-    const int8_t* input_data, const RuntimeShape& filter_shape,
-    const int8_t* filter_data, const RuntimeShape& bias_shape,
+    const int8_t* input_data1, const RuntimeShape& filter_shape,
+    const int8_t* filter_data1, const RuntimeShape& bias_shape,
     const int32_t* bias_data, const RuntimeShape& output_shape,
     int8_t* output_data) {
   // Get parameters.
-  // alignas(64) const int8_t* input_data = input_data1;
-  // alignas(64) const int8_t* filter_data = filter_data1;
+  alignas(64) const int8_t* input_data = input_data1;
+  alignas(64) const int8_t* filter_data = filter_data1;
   //   const int32_t input_offset = params.input_offset;  // r = s(q - Z)
   const int stride_width = params.stride_width;
   const int stride_height = params.stride_height;
@@ -64,8 +64,8 @@ inline void ConvPerChannel(
   const int32_t output_offset = params.output_offset;
 
   // Set min and max value of the output.
-    const int32_t output_activation_min = params.quantized_activation_min;
-    const int32_t output_activation_max = params.quantized_activation_max;
+  const int32_t output_activation_min = params.quantized_activation_min;
+  const int32_t output_activation_max = params.quantized_activation_max;
 
   // Consistency check.
   TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
@@ -183,18 +183,28 @@ inline void ConvPerChannel(
 
           // printf("PreACC : %ld\n", cfu_op0(8, 0, 0));
           // int32_t acc = cfu_op0(8, 0, 0);
+          // printf("PreACC : %ld\n", cfu_op0(8, 0, 0));
           if (__builtin_expect(!!(bias_data), 1)) {
             // acc += bias_data[out_channel];
             cfu_op0(13, bias_data[out_channel], 0);
           }
 
-          int32_t acc = cfu_op0(8, 0, 0);
 
-          // printf("PostACC : %ld\n", acc);
+          // printf("PostACC : %ld\n", cfu_op0(8, 0, 0));
           // printf("PostACC : %ld\n", acc);
           // cfu_op0(12, acc, 0);
 
+          // int32_t acc = cfu_op0(8, 0, 0);
+          // unable to debug MBQM
+          // acc = MultiplyByQuantizedMultiplier(
+          // acc, output_multiplier[out_channel], output_shift[out_channel]);
+
+          // cfu_op0(14, acc, 0);
+          // acc += output_offset;
+          // acc = std::max(acc, output_activation_min);
+          // acc = std::min(acc, output_activation_max);
           // /*
+          int32_t acc = cfu_op0(8, 0, 0);
           acc = MultiplyByQuantizedMultiplier(
           acc, output_multiplier[out_channel], output_shift[out_channel]);
           acc += output_offset;
@@ -203,6 +213,8 @@ inline void ConvPerChannel(
           // */
           //   acc = cfu_op0(11, 0, 0);
           // printf("Final : %ld\n", acc);
+          // int32_t out = cfu_op0(10, 0, 0);
+          // printf("Final : %ld\n", out);
           output_data[Offset(output_shape, 0, out_y, out_x, out_channel)] =
               static_cast<int8_t>(acc);
         }
@@ -210,7 +222,7 @@ inline void ConvPerChannel(
     }
   // }
   printf("END of calling CONV\n");
-}
+ }
 
 inline void ConvPerChannelWithPackedInt4Weights(
     const ConvParams& params, const int32_t* output_multiplier,
