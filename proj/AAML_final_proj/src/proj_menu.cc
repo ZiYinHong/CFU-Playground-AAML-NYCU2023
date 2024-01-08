@@ -40,24 +40,11 @@ void do_enter_mlperf_tiny(void){
     ee_serial_callback(c);
   }
 }
-
-void test_mbqm(void){
-  cfu_op0(2, 456, 56);
-  cfu_op0(3, 456, 56);
-  cfu_op0(4, 456, 56);
-  cfu_op0(5, 456, 56);
-  cfu_op0(6, 0, 0);
-  int32_t acc = cfu_op0(7, 0, 0);
-  printf("ACC : %ld\n", acc);
-
-}
-
 struct Menu MENU = {
     "Project Menu",
     "project",
     {
         MENU_ITEM('0', "Enter MLPerf Tiny Benchmark Interface", do_enter_mlperf_tiny),
-        MENU_ITEM('1', "test mbqm", test_mbqm),
         MENU_END,
     },
 };
