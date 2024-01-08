@@ -18,8 +18,10 @@ The average cycles taken should be around **67M** on golden tests. (Originally 1
 
 Accuracy : **0.875**, Latency : **897375.325 us** from last run. (No model modifications)
 
-### EXTRA Toolchains
-cmds above will install **sbt-1.2.0** and stuffs on first run.
+### Toolchains
+1. defaults : run scripts at *{CFU-ROOT}/scripts/setup* (litex / VexRiscv / ... ) 
+
+2. EXTRA_LITEX_ARGS above will install **sbt-1.2.0** and stuffs on first run.
 
 ### Features (TBU)
 
