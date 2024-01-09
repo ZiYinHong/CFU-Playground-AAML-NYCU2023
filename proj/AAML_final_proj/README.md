@@ -14,6 +14,8 @@
 * `make EXTRA_LITEX_ARGS="--cpu-variant=generate+csrPluginConfig:all+cfu+iCacheSize:8192+dCacheSize:8192+prediction:dynamic" prog`
 * `make EXTRA_LITEX_ARGS="--cpu-variant=generate+csrPluginConfig:all+cfu+iCacheSize:8192+dCacheSize:8192+prediction:dynamic" load`
 
+***If there's any error compiling please issue. Thanks.***
+
 The average cycles taken should be around **67M** on golden tests. (Originally 154M)
 
 Accuracy : **0.875**, Latency : **897375.325 us** from last run. (No model modifications)
