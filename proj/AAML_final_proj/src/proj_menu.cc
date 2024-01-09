@@ -40,7 +40,6 @@ void do_enter_mlperf_tiny(void){
     ee_serial_callback(c);
   }
 }
-
 struct Menu MENU = {
     "Project Menu",
     "project",
