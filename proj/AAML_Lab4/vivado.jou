@@ -1,0 +1,17 @@
+#-----------------------------------------------------------
+# Vivado v2017.3 (64-bit)
+# SW Build 2018833 on Wed Oct  4 19:58:07 MDT 2017
+# IP Build 2016188 on Wed Oct  4 21:52:56 MDT 2017
+# Start of session at: Mon Oct  9 00:43:06 2023
+# Process ID: 12520
+# Current directory: /home/michelle/CFU-Playground/proj/lab2_cfu
+# Command line: vivado
+# Log file: /home/michelle/CFU-Playground/proj/lab2_cfu/vivado.log
+# Journal file: /home/michelle/CFU-Playground/proj/lab2_cfu/vivado.jou
+#-----------------------------------------------------------
+start_gui
+open_project /home/michelle/CFU-Playground/proj/lab2_cfu/project_1/project_1.xpr
+update_compile_order -fileset sources_1
+update_compile_order -fileset sources_1
+launch_simulation
+launch_simulation
